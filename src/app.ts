@@ -1,5 +1,7 @@
 import express, { Application, Request, Response } from 'express';
 import cors from 'cors';
+import notFound from './middlewares/notFound';
+import globalErrorHandler from './middlewares/globalErrorHandler';
 
 const app: Application = express();
 
@@ -13,5 +15,11 @@ app.use(cors());
 app.get('/', (req: Request, res: Response) => {
   res.send('Hello from Apollo Gears World!');
 });
+
+// global error handler
+app.use(globalErrorHandler);
+
+// not found middleware
+app.use(notFound);
 
 export default app;
