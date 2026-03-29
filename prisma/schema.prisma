@@ -7,8 +7,164 @@ datasource db {
   provider = "postgresql"
 }
 
+enum UserRole {
+  ADMIN
+  MANAGER
+  MEMBER
+}
+
+enum MealType {
+  BREAKFAST
+  LUNCH
+  DINNER
+}
+
+enum ExpenseCategory {
+  GAS
+  TRANSPORT
+  BAZAR
+  OTHER
+}
+
+enum DayOfWeek {
+  SUNDAY
+  MONDAY
+  TUESDAY
+  WEDNESDAY
+  THURSDAY
+  FRIDAY
+  SATURDAY
+}
+
 model User {
-  id    Int     @id @default(autoincrement())
-  email String  @unique
-  name  String?
+  id           String   @id @default(cuid())
+  firebaseUid  String   @unique
+  name         String
+  email        String   @unique
+  mobile       String?
+  role         UserRole @default(MEMBER)
+  profileImage String?
+  balance      Decimal  @default(0) @db.Decimal(10, 2)
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  // Meal Registration relations
+  registrations     MealRegistration[] @relation("MemberRegistrations")
+  registrationsMade MealRegistration[] @relation("RegisteredBy")
+
+  // Deposit relations
+  deposits         Deposit[] @relation("MemberDeposits")
+  depositsRecorded Deposit[] @relation("RecordedBy")
+
+  // Expense relations
+  expensesLogged Expense[]
+
+  // Template relations
+  templatesUpdated WeeklyMealTemplate[]
+
+  // Schedule relations
+  schedulesCreated MealSchedule[]
+
+  // Deadline relations
+  deadlinesUpdated MealDeadline[]
+
+  // Finalization relations
+  finalizationsPerformed MonthlyFinalization[]
+}
+
+model WeeklyMealTemplate {
+  id          String     @id @default(cuid())
+  dayOfWeek   DayOfWeek  @unique
+  meals       MealType[]
+  updatedById String
+  updatedBy   User       @relation(fields: [updatedById], references: [id])
+  updatedAt   DateTime   @updatedAt
+}
+
+model MealSchedule {
+  id          String          @id @default(cuid())
+  date        DateTime        @unique
+  createdById String
+  createdBy   User            @relation(fields: [createdById], references: [id])
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+  meals       ScheduledMeal[]
+}
+
+model ScheduledMeal {
+  id            String             @id @default(cuid())
+  scheduleId    String
+  schedule      MealSchedule       @relation(fields: [scheduleId], references: [id], onDelete: Cascade)
+  type          MealType
+  isAvailable   Boolean            @default(true)
+  weight        Decimal            @default(1.0) @db.Decimal(5, 2)
+  menu          String?
+  updatedAt     DateTime           @updatedAt
+  registrations MealRegistration[]
+
+  @@unique([scheduleId, type])
+}
+
+model MealRegistration {
+  id              String        @id @default(cuid())
+  scheduledMealId String
+  scheduledMeal   ScheduledMeal @relation(fields: [scheduledMealId], references: [id], onDelete: Cascade)
+  userId          String
+  user            User          @relation("MemberRegistrations", fields: [userId], references: [id])
+  count           Int           @default(1)
+  registeredById  String
+  registeredBy    User          @relation("RegisteredBy", fields: [registeredById], references: [id])
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  @@unique([scheduledMealId, userId])
+}
+
+model Deposit {
+  id           String   @id @default(cuid())
+  userId       String
+  user         User     @relation("MemberDeposits", fields: [userId], references: [id])
+  amount       Decimal  @db.Decimal(10, 2)
+  recordedById String
+  recordedBy   User     @relation("RecordedBy", fields: [recordedById], references: [id])
+  month        String // YYYY-MM
+  note         String?
+  date         DateTime @default(now())
+  createdAt    DateTime @default(now())
+}
+
+model Expense {
+  id          String          @id @default(cuid())
+  date        DateTime
+  amount      Decimal         @db.Decimal(10, 2)
+  category    ExpenseCategory
+  personName  String
+  description String?
+  loggedById  String
+  loggedBy    User            @relation(fields: [loggedById], references: [id])
+  month       String // YYYY-MM
+  createdAt   DateTime        @default(now())
+}
+
+model MealDeadline {
+  id          String   @id @default(cuid())
+  type        MealType @unique
+  time        String // e.g., "22:00"
+  offsetDays  Int      @default(0) // e.g., -1 for previous day
+  updatedById String
+  updatedBy   User     @relation(fields: [updatedById], references: [id])
+  updatedAt   DateTime @updatedAt
+}
+
+model MonthlyFinalization {
+  id                     String   @id @default(cuid())
+  month                  String   @unique // YYYY-MM
+  totalExpenses          Decimal  @db.Decimal(12, 2)
+  totalWeightedMealCount Decimal  @db.Decimal(12, 2)
+  mealRate               Decimal  @db.Decimal(10, 4)
+  finalizedById          String
+  finalizedBy            User     @relation(fields: [finalizedById], references: [id])
+  finalizedAt            DateTime @default(now())
+  isLocked               Boolean  @default(true)
 }
