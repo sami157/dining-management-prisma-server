@@ -7,7 +7,7 @@ const register = catchAsync(async (req, res) => {
   const result = await AuthService.register(req.body);
 
   sendResponse(res, {
-    statusCode: httpStatus.OK,
+    statusCode: httpStatus.CREATED,
     success: true,
     message: 'User registered successfully!',
     data: result,
