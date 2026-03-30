@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { AuthRoutes } from '../modules/Auth/auth.route';
+import { DeadlineRoutes } from '../modules/Deadline/deadline.route';
 
 const router = Router();
 
@@ -12,6 +13,10 @@ const moduleRoutes: TModuleRoute[] = [
     {
       path: '/auth',
       handler: AuthRoutes,
+    },
+    {
+      path: '/deadline',
+      handler: DeadlineRoutes,
     },
 ];
 

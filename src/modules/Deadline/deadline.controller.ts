@@ -13,6 +13,17 @@ const getAllDeadlines = catchAsync(async (req, res) => {
   });
 });
 
+const upsertDeadline = catchAsync(async (req, res) => {
+  const result = await DeadlineService.upsertDeadline(req.body);
+  sendResponse(res, {
+    statusCode: httpStatus.OK,
+    success: true,
+    message: 'Meal deadline created/updated successfully!',
+    data: result,
+  });
+});
+
 export const DeadlineController = {
   getAllDeadlines,
+  upsertDeadline,
 };
