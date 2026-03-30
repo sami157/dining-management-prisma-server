@@ -13,6 +13,18 @@ const getTemplate = catchAsync(async (req, res) => {
   });
 });
 
+const upsertTemplate = catchAsync(async (req, res) => {
+  const { dayOfWeek, meals, updatedById } = req.body;
+  const result = await MealTemplateService.upsertTemplate(dayOfWeek, meals, updatedById);
+  sendResponse(res, {
+    statusCode: httpStatus.OK,
+    success: true,
+    message: 'Meal template updated successfully!',
+    data: result,
+  });
+});
+
 export const MealTemplateController = {
   getTemplate,
+  upsertTemplate,
 };

@@ -13,6 +13,19 @@ const getAllFinalizations = catchAsync(async (req, res) => {
   });
 });
 
+const finalizeMonth = catchAsync(async (req, res) => {
+  const { month, finalizedById } = req.body;
+  const result = await FinalizationService.finalizeMonth(month, finalizedById);
+
+  sendResponse(res, {
+    statusCode: httpStatus.CREATED,
+    success: true,
+    message: 'Month finalized successfully!',
+    data: result,
+  });
+});
+
 export const FinalizationController = {
   getAllFinalizations,
+  finalizeMonth,
 };

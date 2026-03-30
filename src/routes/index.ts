@@ -2,6 +2,12 @@ import { Router } from 'express';
 import { AuthRoutes } from '../modules/Auth/auth.route';
 import { DeadlineRoutes } from '../modules/Deadline/deadline.route';
 import { DepositRoutes } from '../modules/Deposit/deposit.route';
+import { ExpenseRoutes } from '../modules/Expense/expense.route';
+import { FinalizationRoutes } from '../modules/Finalization/finalization.route';
+import { MealScheduleRoutes } from '../modules/MealSchedule/mealSchedule.route';
+import { MealTemplateRoutes } from '../modules/MealTemplate/mealTemplate.route';
+import { RegistrationRoutes } from '../modules/Registration/registration.route';
+import { UserRoutes } from '../modules/User/user.route';
 
 const router = Router();
 
@@ -22,6 +28,30 @@ const moduleRoutes: TModuleRoute[] = [
     {
       path: '/deposits',
       handler: DepositRoutes,
+    },
+    {
+      path: '/expenses',
+      handler: ExpenseRoutes,
+    },
+    {
+      path: '/finalization',
+      handler: FinalizationRoutes,
+    },
+    {
+      path: '/meal-schedules',
+      handler: MealScheduleRoutes,
+    },
+    {
+      path: '/meal-templates',
+      handler: MealTemplateRoutes,
+    },
+    {
+      path: '/registrations',
+      handler: RegistrationRoutes,
+    },
+    {
+      path: '/users',
+      handler: UserRoutes,
     },
 ];
 

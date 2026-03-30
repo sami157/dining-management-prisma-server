@@ -13,6 +13,30 @@ const getAllSchedules = catchAsync(async (req, res) => {
   });
 });
 
+const createSchedule = catchAsync(async (req, res) => {
+  const { date, createdById, meals } = req.body;
+  const result = await MealScheduleService.createSchedule(date, createdById, meals);
+  sendResponse(res, {
+    statusCode: httpStatus.CREATED,
+    success: true,
+    message: 'Meal schedule created successfully!',
+    data: result,
+  });
+});
+
+const deleteSchedule = catchAsync(async (req, res) => {
+  const { id } = req.params;
+  await MealScheduleService.deleteSchedule(id);
+  sendResponse(res, {
+    statusCode: httpStatus.OK,
+    success: true,
+    message: 'Meal schedule deleted successfully!',
+    data: null,
+  });
+});
+
 export const MealScheduleController = {
   getAllSchedules,
+  createSchedule,
+  deleteSchedule,
 };
