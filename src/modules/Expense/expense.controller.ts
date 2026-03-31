@@ -24,6 +24,17 @@ const createExpense = catchAsync(async (req, res) => {
   });
 });
 
+const updateExpense = catchAsync(async (req, res) => {
+  const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
+  const result = await ExpenseService.updateExpense(id, req.body);
+  sendResponse(res, {
+    statusCode: httpStatus.OK,
+    success: true,
+    message: 'Expense updated successfully!',
+    data: result,
+  });
+});
+
 const deleteExpense = catchAsync(async (req, res) => {
   const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
   await ExpenseService.deleteExpense(id);
@@ -38,5 +49,6 @@ const deleteExpense = catchAsync(async (req, res) => {
 export const ExpenseController = {
   getAllExpenses,
   createExpense,
+  updateExpense,
   deleteExpense,
 };
