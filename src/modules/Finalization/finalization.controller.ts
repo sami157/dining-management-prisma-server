@@ -1,10 +1,16 @@
 import httpStatus from 'http-status';
+import ApiError from '../../errors/ApiError';
 import catchAsync from '../../utils/catchAsync';
 import sendResponse from '../../utils/sendResponse';
 import { FinalizationService } from './finalization.service';
 
 const getAllFinalizations = catchAsync(async (req, res) => {
-  const result = await FinalizationService.getAllFinalizations();
+  const requester = req.firebaseUser;
+  if (!requester) {
+    throw new ApiError(httpStatus.UNAUTHORIZED, 'Authenticated user context is missing');
+  }
+
+  const result = await FinalizationService.getAllFinalizations(requester);
   sendResponse(res, {
     statusCode: httpStatus.OK,
     success: true,
@@ -13,9 +19,31 @@ const getAllFinalizations = catchAsync(async (req, res) => {
   });
 });
 
+const getFinalizationByMonth = catchAsync(async (req, res) => {
+  const month = Array.isArray(req.params.month) ? req.params.month[0] : req.params.month;
+  const requester = req.firebaseUser;
+  if (!requester) {
+    throw new ApiError(httpStatus.UNAUTHORIZED, 'Authenticated user context is missing');
+  }
+
+  const result = await FinalizationService.getFinalizationByMonth(month, requester);
+
+  sendResponse(res, {
+    statusCode: httpStatus.OK,
+    success: true,
+    message: 'Monthly finalization details retrieved successfully!',
+    data: result,
+  });
+});
+
 const finalizeMonth = catchAsync(async (req, res) => {
-  const { month, finalizedById } = req.body;
-  const result = await FinalizationService.finalizeMonth(month, finalizedById);
+  const actorId = req.firebaseUser?.id;
+  if (!actorId) {
+    throw new ApiError(httpStatus.UNAUTHORIZED, 'Authenticated user context is missing');
+  }
+
+  const { month } = req.body;
+  const result = await FinalizationService.finalizeMonth(month, actorId);
 
   sendResponse(res, {
     statusCode: httpStatus.CREATED,
@@ -27,5 +55,6 @@ const finalizeMonth = catchAsync(async (req, res) => {
 
 export const FinalizationController = {
   getAllFinalizations,
+  getFinalizationByMonth,
   finalizeMonth,
 };

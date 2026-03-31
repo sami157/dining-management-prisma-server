@@ -1,5 +1,7 @@
 import { prisma } from '../../lib/prisma';
 import ApiError from '../../errors/ApiError';
+import { getCurrentDhakaDateString, toUtcDateAtStartOfDay } from '../../utils/dateTime';
+import { assertMonthNotFinalized } from '../../utils/finalizationLock';
 
 export type DepositPayload = {
   userId: string;
@@ -39,6 +41,8 @@ const createDeposit = async (payload: DepositPayload) => {
     throw new ApiError(400, 'Deposit amount must be greater than 0');
   }
 
+  await assertMonthNotFinalized(payload.month);
+
   return prisma.deposit.create({
     data: {
       userId: payload.userId,
@@ -46,7 +50,9 @@ const createDeposit = async (payload: DepositPayload) => {
       recordedById: payload.recordedById,
       month: payload.month,
       note: payload.note,
-      date: payload.date ? new Date(payload.date) : new Date(),
+      date: payload.date
+        ? toUtcDateAtStartOfDay(payload.date)
+        : toUtcDateAtStartOfDay(getCurrentDhakaDateString()),
     },
   });
 };
@@ -54,6 +60,11 @@ const createDeposit = async (payload: DepositPayload) => {
 const updateDeposit = async (id: string, payload: UpdateDepositPayload) => {
   const existing = await prisma.deposit.findUnique({ where: { id } });
   if (!existing) throw new ApiError(404, 'Deposit not found');
+  await assertMonthNotFinalized(existing.month);
+
+  if (payload.month && payload.month !== existing.month) {
+    await assertMonthNotFinalized(payload.month);
+  }
 
   if (payload.amount !== undefined && payload.amount <= 0) {
     throw new ApiError(400, 'Deposit amount must be greater than 0');
@@ -67,7 +78,7 @@ const updateDeposit = async (id: string, payload: UpdateDepositPayload) => {
       recordedById: payload.recordedById,
       month: payload.month,
       note: payload.note,
-      date: payload.date ? new Date(payload.date) : undefined,
+      date: payload.date ? toUtcDateAtStartOfDay(payload.date) : undefined,
     },
   });
 };
@@ -75,6 +86,7 @@ const updateDeposit = async (id: string, payload: UpdateDepositPayload) => {
 const deleteDeposit = async (id: string) => {
   const existing = await prisma.deposit.findUnique({ where: { id } });
   if (!existing) throw new ApiError(404, 'Deposit not found');
+  await assertMonthNotFinalized(existing.month);
 
   return prisma.deposit.delete({ where: { id } });
 };

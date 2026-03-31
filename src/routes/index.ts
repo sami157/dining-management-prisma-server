@@ -26,6 +26,10 @@ const moduleRoutes: TModuleRoute[] = [
       handler: DeadlineRoutes,
     },
     {
+      path: '/deadlines',
+      handler: DeadlineRoutes,
+    },
+    {
       path: '/deposits',
       handler: DepositRoutes,
     },
@@ -38,11 +42,23 @@ const moduleRoutes: TModuleRoute[] = [
       handler: FinalizationRoutes,
     },
     {
+      path: '/finalize',
+      handler: FinalizationRoutes,
+    },
+    {
       path: '/meal-schedules',
       handler: MealScheduleRoutes,
     },
     {
+      path: '/schedules',
+      handler: MealScheduleRoutes,
+    },
+    {
       path: '/meal-templates',
+      handler: MealTemplateRoutes,
+    },
+    {
+      path: '/templates',
       handler: MealTemplateRoutes,
     },
     {

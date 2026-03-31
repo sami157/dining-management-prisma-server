@@ -1,4 +1,5 @@
 import httpStatus from 'http-status';
+import ApiError from '../../errors/ApiError';
 import catchAsync from '../../utils/catchAsync';
 import sendResponse from '../../utils/sendResponse';
 import { UserService } from './user.service';
@@ -35,6 +36,33 @@ const updateUser = catchAsync(async (req, res) => {
   });
 });
 
+const updateMyProfile = catchAsync(async (req, res) => {
+  const userId = req.firebaseUser?.id;
+  if (!userId) {
+    throw new ApiError(httpStatus.UNAUTHORIZED, 'Authenticated user context is missing');
+  }
+
+  const result = await UserService.updateMyProfile(userId, req.body);
+  sendResponse(res, {
+    statusCode: httpStatus.OK,
+    success: true,
+    message: 'Profile updated successfully!',
+    data: result,
+  });
+});
+
+const updateUserRole = catchAsync(async (req, res) => {
+  const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
+  const { role } = req.body;
+  const result = await UserService.updateUserRole(id, role);
+  sendResponse(res, {
+    statusCode: httpStatus.OK,
+    success: true,
+    message: 'User role updated successfully!',
+    data: result,
+  });
+});
+
 const deactivateUser = catchAsync(async (req, res) => {
   const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
   const result = await UserService.deactivateUser(id);
@@ -50,5 +78,7 @@ export const UserController = {
   getAllUsers,
   getUserById,
   updateUser,
+  updateMyProfile,
+  updateUserRole,
   deactivateUser,
 };

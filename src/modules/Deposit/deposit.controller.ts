@@ -6,7 +6,14 @@ import { DepositService } from './deposit.service';
 
 const getAllDeposits = catchAsync(async (req, res) => {
   const userId = (req.query.userId as string) || undefined;
-  const result = await DepositService.getAllDeposits(userId);
+  const requester = req.firebaseUser;
+
+  if (!requester) {
+    throw new ApiError(httpStatus.UNAUTHORIZED, 'Authenticated user context is missing');
+  }
+
+  const scopedUserId = requester.role === 'MEMBER' ? requester.id : userId;
+  const result = await DepositService.getAllDeposits(scopedUserId);
 
   sendResponse(res, {
     statusCode: httpStatus.OK,
@@ -17,7 +24,15 @@ const getAllDeposits = catchAsync(async (req, res) => {
 });
 
 const createDeposit = catchAsync(async (req, res) => {
-  const result = await DepositService.createDeposit(req.body);
+  const actorId = req.firebaseUser?.id;
+  if (!actorId) {
+    throw new ApiError(httpStatus.UNAUTHORIZED, 'Authenticated user context is missing');
+  }
+
+  const result = await DepositService.createDeposit({
+    ...req.body,
+    recordedById: actorId,
+  });
 
   sendResponse(res, {
     statusCode: httpStatus.CREATED,
@@ -47,7 +62,15 @@ const getMyMonthlyDepositTotal = catchAsync(async (req, res) => {
 
 const updateDeposit = catchAsync(async (req, res) => {
   const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
-  const result = await DepositService.updateDeposit(id, req.body);
+  const actorId = req.firebaseUser?.id;
+  if (!actorId) {
+    throw new ApiError(httpStatus.UNAUTHORIZED, 'Authenticated user context is missing');
+  }
+
+  const result = await DepositService.updateDeposit(id, {
+    ...req.body,
+    recordedById: actorId,
+  });
 
   sendResponse(res, {
     statusCode: httpStatus.OK,

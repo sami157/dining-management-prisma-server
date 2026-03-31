@@ -1,17 +1,103 @@
 import { prisma } from '../../lib/prisma';
 import ApiError from '../../errors/ApiError';
+import { UserRole } from '../../../generated/prisma/enums';
+import { getMonthDateRangeUtc } from '../../utils/dateTime';
 
-const getAllFinalizations = async () => {
-  return prisma.monthlyFinalization.findMany({ orderBy: { month: 'desc' } });
+type RequestActor = {
+  id: string;
+  role: UserRole;
+};
+
+const getMemberBreakdownForMonth = async (month: string, userId?: string) => {
+  const finalization = await prisma.monthlyFinalization.findUnique({
+    where: { month },
+  });
+
+  if (!finalization) throw new ApiError(404, 'Monthly finalization not found');
+
+  const { startDate, endDate } = getMonthDateRangeUtc(month);
+
+  const registrations = await prisma.mealRegistration.findMany({
+    where: {
+      userId,
+      scheduledMeal: {
+        schedule: {
+          date: {
+            gte: startDate,
+            lt: endDate,
+          },
+        },
+      },
+    },
+    include: {
+      user: true,
+      scheduledMeal: true,
+    },
+  });
+
+  const deposits = await prisma.deposit.findMany({
+    where: { month, userId },
+  });
+
+  const memberIds = new Set([...registrations.map((r) => r.userId), ...deposits.map((d) => d.userId)]);
+  const memberBreakdown = Array.from(memberIds).map((memberId) => {
+    const userRegistrations = registrations.filter((registration) => registration.userId === memberId);
+    const userDeposits = deposits.filter((deposit) => deposit.userId === memberId);
+    const weightedMealCount = userRegistrations.reduce(
+      (acc, registration) => acc + Number(registration.count) * Number(registration.scheduledMeal.weight),
+      0,
+    );
+    const totalDeposits = userDeposits.reduce((acc, deposit) => acc + Number(deposit.amount), 0);
+    const mealCost = weightedMealCount * Number(finalization.mealRate);
+
+    return {
+      user: userRegistrations[0]?.user ?? null,
+      weightedMealCount,
+      totalDeposits,
+      mealCost,
+    };
+  });
+
+  return {
+    finalization,
+    memberBreakdown,
+  };
+};
+
+const getAllFinalizations = async (actor: RequestActor) => {
+  const finalizations = await prisma.monthlyFinalization.findMany({ orderBy: { month: 'desc' } });
+
+  if (actor.role !== 'MEMBER') {
+    return finalizations;
+  }
+
+  const summaries = await Promise.all(
+    finalizations.map(async (finalization) => {
+      const breakdown = await getMemberBreakdownForMonth(finalization.month, actor.id);
+      return {
+        finalization,
+        summary: breakdown.memberBreakdown[0] ?? {
+          user: null,
+          weightedMealCount: 0,
+          totalDeposits: 0,
+          mealCost: 0,
+        },
+      };
+    }),
+  );
+
+  return summaries;
+};
+
+const getFinalizationByMonth = async (month: string, actor: RequestActor) => {
+  return getMemberBreakdownForMonth(month, actor.role === 'MEMBER' ? actor.id : undefined);
 };
 
 const finalizeMonth = async (month: string, finalizedById: string) => {
   const existing = await prisma.monthlyFinalization.findUnique({ where: { month } });
   if (existing) throw new ApiError(400, 'Month already finalized');
 
-  const startDate = new Date(`${month}-01T00:00:00.000Z`);
-  const endDate = new Date(startDate);
-  endDate.setMonth(endDate.getMonth() + 1);
+  const { startDate, endDate } = getMonthDateRangeUtc(month);
 
   const expenses = await prisma.expense.findMany({ where: { month } });
   if (!expenses.length) throw new ApiError(400, 'At least one expense is required to finalize');
@@ -68,5 +154,6 @@ const finalizeMonth = async (month: string, finalizedById: string) => {
 
 export const FinalizationService = {
   getAllFinalizations,
+  getFinalizationByMonth,
   finalizeMonth,
 };

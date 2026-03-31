@@ -1,5 +1,7 @@
 import { prisma } from '../../lib/prisma';
 import ApiError from '../../errors/ApiError';
+import { getCurrentDhakaDateString, toUtcDateAtStartOfDay } from '../../utils/dateTime';
+import { assertMonthNotFinalized } from '../../utils/finalizationLock';
 
 export type ExpensePayload = {
   date?: string;
@@ -19,9 +21,13 @@ const getAllExpenses = async (month?: string) => {
 };
 
 const createExpense = async (payload: ExpensePayload) => {
+  await assertMonthNotFinalized(payload.month);
+
   return prisma.expense.create({
     data: {
-      date: payload.date ? new Date(payload.date) : new Date(),
+      date: payload.date
+        ? toUtcDateAtStartOfDay(payload.date)
+        : toUtcDateAtStartOfDay(getCurrentDhakaDateString()),
       amount: payload.amount,
       category: payload.category,
       personName: payload.personName,
@@ -35,6 +41,11 @@ const createExpense = async (payload: ExpensePayload) => {
 const updateExpense = async (id: string, payload: UpdateExpensePayload) => {
   const existing = await prisma.expense.findUnique({ where: { id } });
   if (!existing) throw new ApiError(404, 'Expense not found');
+  await assertMonthNotFinalized(existing.month);
+
+  if (payload.month && payload.month !== existing.month) {
+    await assertMonthNotFinalized(payload.month);
+  }
 
   if (payload.amount !== undefined && payload.amount <= 0) {
     throw new ApiError(400, 'Expense amount must be greater than 0');
@@ -43,7 +54,7 @@ const updateExpense = async (id: string, payload: UpdateExpensePayload) => {
   return prisma.expense.update({
     where: { id },
     data: {
-      date: payload.date ? new Date(payload.date) : undefined,
+      date: payload.date ? toUtcDateAtStartOfDay(payload.date) : undefined,
       amount: payload.amount,
       category: payload.category,
       personName: payload.personName,
@@ -57,6 +68,7 @@ const updateExpense = async (id: string, payload: UpdateExpensePayload) => {
 const deleteExpense = async (id: string) => {
   const existing = await prisma.expense.findUnique({ where: { id } });
   if (!existing) throw new ApiError(404, 'Expense not found');
+  await assertMonthNotFinalized(existing.month);
   return prisma.expense.delete({ where: { id } });
 };
 

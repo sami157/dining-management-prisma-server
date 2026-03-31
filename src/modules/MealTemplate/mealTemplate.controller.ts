@@ -1,4 +1,5 @@
 import httpStatus from 'http-status';
+import ApiError from '../../errors/ApiError';
 import catchAsync from '../../utils/catchAsync';
 import sendResponse from '../../utils/sendResponse';
 import { MealTemplateService } from './mealTemplate.service';
@@ -14,8 +15,13 @@ const getTemplate = catchAsync(async (req, res) => {
 });
 
 const upsertTemplate = catchAsync(async (req, res) => {
-  const { dayOfWeek, meals, updatedById } = req.body;
-  const result = await MealTemplateService.upsertTemplate(dayOfWeek, meals, updatedById);
+  const actorId = req.firebaseUser?.id;
+  if (!actorId) {
+    throw new ApiError(httpStatus.UNAUTHORIZED, 'Authenticated user context is missing');
+  }
+
+  const { dayOfWeek, meals } = req.body;
+  const result = await MealTemplateService.upsertTemplate(dayOfWeek, meals, actorId);
   sendResponse(res, {
     statusCode: httpStatus.OK,
     success: true,
