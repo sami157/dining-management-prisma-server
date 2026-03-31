@@ -25,7 +25,7 @@ const upsertRegistration = catchAsync(async (req, res) => {
 });
 
 const deleteRegistration = catchAsync(async (req, res) => {
-  const { id } = req.params;
+  const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
   await RegistrationService.deleteRegistration(id);
   sendResponse(res, {
     statusCode: httpStatus.OK,

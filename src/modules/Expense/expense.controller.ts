@@ -25,7 +25,7 @@ const createExpense = catchAsync(async (req, res) => {
 });
 
 const deleteExpense = catchAsync(async (req, res) => {
-  const { id } = req.params;
+  const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
   await ExpenseService.deleteExpense(id);
   sendResponse(res, {
     statusCode: httpStatus.OK,

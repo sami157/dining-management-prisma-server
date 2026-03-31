@@ -14,7 +14,7 @@ const getAllUsers = catchAsync(async (req, res) => {
 });
 
 const getUserById = catchAsync(async (req, res) => {
-  const { id } = req.params;
+  const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
   const result = await UserService.getUserById(id);
   sendResponse(res, {
     statusCode: httpStatus.OK,
@@ -25,7 +25,7 @@ const getUserById = catchAsync(async (req, res) => {
 });
 
 const updateUser = catchAsync(async (req, res) => {
-  const { id } = req.params;
+  const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
   const result = await UserService.updateUser(id, req.body);
   sendResponse(res, {
     statusCode: httpStatus.OK,
@@ -36,7 +36,7 @@ const updateUser = catchAsync(async (req, res) => {
 });
 
 const deactivateUser = catchAsync(async (req, res) => {
-  const { id } = req.params;
+  const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
   const result = await UserService.deactivateUser(id);
   sendResponse(res, {
     statusCode: httpStatus.OK,

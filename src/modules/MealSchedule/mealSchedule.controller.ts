@@ -25,7 +25,7 @@ const createSchedule = catchAsync(async (req, res) => {
 });
 
 const deleteSchedule = catchAsync(async (req, res) => {
-  const { id } = req.params;
+  const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
   await MealScheduleService.deleteSchedule(id);
   sendResponse(res, {
     statusCode: httpStatus.OK,

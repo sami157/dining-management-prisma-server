@@ -10,7 +10,7 @@ const handlePrismaError = (
 
   if (err.code === 'P2002') {
     statusCode = 409;
-    message = 'Duplicate Enty';
+    message = 'Duplicate Entry';
     errorSources = [
       {
         path: '',
