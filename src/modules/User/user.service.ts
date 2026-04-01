@@ -15,6 +15,10 @@ const getAllUsers = async () => {
   return prisma.user.findMany({ orderBy: { createdAt: 'asc' } });
 };
 
+const getMyProfile = async (id: string) => {
+  return getUserById(id);
+};
+
 const getUserById = async (id: string) => {
   const user = await prisma.user.findUnique({ where: { id } });
   if (!user) throw new ApiError(404, 'User not found');
@@ -50,6 +54,7 @@ const deactivateUser = async (id: string) => {
 
 export const UserService = {
   getAllUsers,
+  getMyProfile,
   getUserById,
   updateUser,
   updateMyProfile,

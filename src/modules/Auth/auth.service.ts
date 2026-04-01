@@ -11,7 +11,6 @@ type AuthRegisterPayload = {
 
 const register = async (payload: AuthRegisterPayload) => {
   const { firebaseUid, name, email, mobile, profileImage } = payload;
-
   try {
     const user = await prisma.user.upsert({
       where: {

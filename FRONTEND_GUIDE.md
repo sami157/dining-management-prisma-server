@@ -1,12 +1,8 @@
-# Frontend API Reference
+# Frontend Validation and Type Reference
 
-This document is the frontend integration reference for the Dining Management backend.
+This document is the frontend reference for request validation schemas and TypeScript-friendly payload types used by the Dining Management backend.
 
-It is written for a Next.js frontend using Firebase Authentication and calling this backend over HTTP.
-
-## Base URL
-
-Use:
+Base API URL:
 
 ```txt
 {BACKEND_BASE_URL}/api/v1
@@ -18,161 +14,231 @@ Example:
 http://localhost:5000/api/v1
 ```
 
-## Authentication
+## How Backend Validation Works
 
-The frontend must authenticate users with Firebase on the client side, then send the Firebase ID token to the backend.
+All validated routes use a Zod schema through `validateRequest()`.
 
-Send this header for every protected request:
+The backend may validate:
 
-```http
-Authorization: Bearer <firebase_id_token>
-```
+- `body`
+- `query`
+- `params`
 
-Example in Next.js:
+Important frontend implications:
 
-```ts
-import { getAuth } from 'firebase/auth';
+- `z.number()` means you must send JSON numbers, not stringified numbers
+- optional fields can be omitted entirely
+- URL fields must be full valid URLs
+- date strings are plain strings, so the frontend should format them exactly as required
+- some update routes allow partial payloads
+- some update routes reject empty objects even if every field is optional
 
-export async function getAuthHeader() {
-  const auth = getAuth();
-  const user = auth.currentUser;
+## Shared String Formats
 
-  if (!user) {
-    throw new Error('User is not signed in');
-  }
+Use these formats exactly:
 
-  const token = await user.getIdToken();
+- `YYYY-MM` for month values like `2026-04`
+- `YYYY-MM-DD` for date values like `2026-04-05`
+- `HH:MM` 24-hour format for deadline times like `22:30`
 
-  return {
-    Authorization: `Bearer ${token}`,
-  };
-}
-```
+## Auth and Actor Fields
 
-## Important Auth Notes
+Do not send these fields from the frontend on protected routes:
 
-- Do not send operator ids like `createdById`, `updatedById`, `recordedById`, `loggedById`, `registeredById`, or `finalizedById` from the frontend for protected actions.
-- The backend derives the acting user from the Firebase token.
-- The backend also loads the application user from PostgreSQL and applies role checks there.
-- Roles are:
-  - `ADMIN`
-  - `MANAGER`
-  - `MEMBER`
+- `createdById`
+- `updatedById`
+- `recordedById`
+- `loggedById`
+- `registeredById`
+- `finalizedById`
 
-## Timezone Rules
+The backend derives them from the authenticated Firebase user.
 
-This backend uses GMT+6 / Dhaka business time for dining logic.
+## Enums
 
-This matters for:
-
-- meal registration deadline cutoffs
-- default deposit dates
-- default expense dates
-
-Frontend recommendation:
-
-- Treat all dining-related dates as Dhaka calendar dates
-- Use `YYYY-MM-DD` for date input values
-- Use `YYYY-MM` for month filters and finalization actions
-- Do not rely on the browser local timezone for deadline UX if users may be outside GMT+6
-
-## Response Shape
-
-Successful responses follow this shape:
-
-```json
-{
-  "success": true,
-  "message": "Resource retrieved successfully",
-  "meta": null,
-  "data": {}
-}
-```
-
-Error responses follow this shape:
-
-```json
-{
-  "success": false,
-  "message": "Error message",
-  "errorSources": [
-    {
-      "path": "fieldName",
-      "message": "Specific validation or business-rule message"
-    }
-  ],
-  "stack": null
-}
-```
-
-## Frontend Conventions
-
-For Next.js, keep a single API wrapper instead of calling `fetch()` ad hoc from many components.
-
-Recommended:
-
-- one shared `apiFetch()` helper
-- attach Firebase token automatically
-- centralize 401 and 403 handling
-- keep route strings in one file
-
-Example:
+These are the backend enum values the frontend should reuse.
 
 ```ts
-type ApiFetchOptions = RequestInit & {
-  auth?: boolean;
+export type UserRole = 'ADMIN' | 'MANAGER' | 'MEMBER';
+
+export type MealType = 'BREAKFAST' | 'LUNCH' | 'DINNER';
+
+export type ExpenseCategory = 'GAS' | 'TRANSPORT' | 'BAZAR' | 'OTHER';
+
+export type DayOfWeek =
+  | 'SUNDAY'
+  | 'MONDAY'
+  | 'TUESDAY'
+  | 'WEDNESDAY'
+  | 'THURSDAY'
+  | 'FRIDAY'
+  | 'SATURDAY';
+```
+
+## Recommended Frontend Request Types
+
+These types mirror the validated request payloads.
+
+```ts
+export type RegisterBody = {
+  firebaseUid: string;
+  name: string;
+  email: string;
+  mobile?: string;
+  profileImage?: string;
 };
 
-export async function apiFetch<T>(path: string, options: ApiFetchOptions = {}) {
-  const headers = new Headers(options.headers || {});
+export type UpdateOwnProfileBody = {
+  name?: string;
+  mobile?: string;
+  profileImage?: string;
+};
 
-  headers.set('Content-Type', 'application/json');
+export type UpdateUserBody = {
+  name?: string;
+  email?: string;
+  mobile?: string;
+  profileImage?: string;
+};
 
-  if (options.auth) {
-    const authHeader = await getAuthHeader();
-    headers.set('Authorization', authHeader.Authorization);
-  }
+export type UpdateUserRoleBody = {
+  role: UserRole;
+};
 
-  const res = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL}/api/v1${path}`, {
-    ...options,
-    headers,
-  });
+export type MealTemplateBody = {
+  dayOfWeek: DayOfWeek;
+  meals: MealType[];
+};
 
-  const json = await res.json();
+export type DeadlineBody = {
+  type: MealType;
+  time: string;
+  offsetDays: number;
+};
 
-  if (!res.ok) {
-    throw json;
-  }
+export type UpdateDeadlineParams = {
+  mealType: MealType;
+};
 
-  return json as T;
-}
+export type UpdateDeadlineBody = {
+  time: string;
+  offsetDays: number;
+};
+
+export type MealDefinition = {
+  type: MealType;
+  isAvailable?: boolean;
+  weight?: number;
+  menu?: string;
+};
+
+export type CreateScheduleBody = {
+  date: string;
+  meals: MealDefinition[];
+};
+
+export type GenerateSchedulesBody = {
+  month: string;
+};
+
+export type AddMealBody = MealDefinition;
+
+export type UpdateMealParams = {
+  mealType: MealType;
+};
+
+export type UpdateMealBody = {
+  isAvailable?: boolean;
+  weight?: number;
+  menu?: string;
+};
+
+export type ScheduleQuery = {
+  date?: string;
+  month?: string;
+};
+
+export type UpsertRegistrationBody = {
+  scheduledMealId: string;
+  userId?: string;
+  count: number;
+};
+
+export type UpdateRegistrationBody = {
+  count: number;
+};
+
+export type CreateDepositBody = {
+  userId: string;
+  amount: number;
+  month: string;
+  note?: string;
+  date?: string;
+};
+
+export type UpdateDepositBody = {
+  userId?: string;
+  amount?: number;
+  month?: string;
+  note?: string;
+  date?: string;
+};
+
+export type MonthlyDepositTotalQuery = {
+  month: string;
+};
+
+export type CreateExpenseBody = {
+  date?: string;
+  amount: number;
+  category: ExpenseCategory;
+  personName: string;
+  description?: string;
+  month: string;
+};
+
+export type UpdateExpenseBody = {
+  date?: string;
+  amount?: number;
+  category?: ExpenseCategory;
+  personName?: string;
+  description?: string;
+  month?: string;
+};
+
+export type FinalizeMonthBody = {
+  month: string;
+};
 ```
 
-## Route Summary
+## Validation Reference by Route
 
-PRD-style route prefixes are available and should be preferred by the frontend:
+Only routes wired through `validateRequest()` are listed below.
 
-- `/auth`
-- `/users`
-- `/templates`
-- `/schedules`
-- `/registrations`
-- `/deadlines`
-- `/deposits`
-- `/expenses`
-- `/finalize`
+### `POST /auth/register`
 
-## 1. Authentication
+Auth: public
 
-### Register App User
+Validated `body`:
 
-Creates or updates the user record in PostgreSQL after Firebase signup/login.
+```ts
+type RegisterBody = {
+  firebaseUid: string;
+  name: string;
+  email: string;
+  mobile?: string;
+  profileImage?: string;
+};
+```
 
-- Method: `POST`
-- Path: `/auth/register`
-- Auth: Public
+Rules:
 
-Request body:
+- `firebaseUid` is required and must be a non-empty string
+- `name` is required and must be a non-empty string
+- `email` is required and must be a valid email
+- `profileImage`, if sent, must be a valid URL
+
+Example:
 
 ```json
 {
@@ -184,96 +250,80 @@ Request body:
 }
 ```
 
-Frontend note:
+### `PATCH /users/me`
 
-- Call this after Firebase signup or after first login if you need to ensure the backend user exists.
+Auth: any authenticated user
 
-## 2. Users
+Validated `body`:
 
-### Get All Users
-
-- Method: `GET`
-- Path: `/users`
-- Auth: `ADMIN`, `MANAGER`
-
-### Get User By ID
-
-- Method: `GET`
-- Path: `/users/:id`
-- Auth: `ADMIN`, `MANAGER`
-
-### Update Own Profile
-
-- Method: `PATCH`
-- Path: `/users/me`
-- Auth: Any authenticated user
-
-Request body:
-
-```json
-{
-  "name": "Updated Name",
-  "mobile": "01700000001",
-  "profileImage": "https://example.com/new-image.jpg"
-}
+```ts
+type UpdateOwnProfileBody = {
+  name?: string;
+  mobile?: string;
+  profileImage?: string;
+};
 ```
 
-### Update User Role
+Rules:
 
-- Method: `PATCH`
-- Path: `/users/:id/role`
-- Auth: `ADMIN`
+- `profileImage`, if sent, must be a valid URL
+- backend currently allows an empty object
 
-Request body:
+### `PATCH /users/:id/role`
 
-```json
-{
-  "role": "MANAGER"
-}
+Auth: `ADMIN`
+
+Validated `body`:
+
+```ts
+type UpdateUserRoleBody = {
+  role: 'ADMIN' | 'MANAGER' | 'MEMBER';
+};
 ```
 
-### Update User By ID
+### `PATCH /users/:id`
 
-- Method: `PATCH`
-- Path: `/users/:id`
-- Auth: `ADMIN`, `MANAGER`
+Auth: `ADMIN`, `MANAGER`
 
-Request body:
+Validated `body`:
 
-```json
-{
-  "name": "User Name",
-  "email": "user@example.com",
-  "mobile": "01700000002",
-  "profileImage": "https://example.com/profile.jpg"
-}
+```ts
+type UpdateUserBody = {
+  name?: string;
+  email?: string;
+  mobile?: string;
+  profileImage?: string;
+};
 ```
 
-Note:
+Rules:
 
-- This route does not handle role changes. Use `/users/:id/role` for role updates.
+- `email`, if sent, must be a valid email
+- `profileImage`, if sent, must be a valid URL
+- backend currently allows an empty object
 
-### Deactivate User
+### `PATCH /templates`
 
-- Method: `DELETE`
-- Path: `/users/:id`
-- Auth: `ADMIN`
+Auth: `ADMIN`, `MANAGER`
 
-## 3. Weekly Meal Template
+Same validation is also used by `POST /templates`.
 
-### Get Template
+Validated `body`:
 
-- Method: `GET`
-- Path: `/templates`
-- Auth: `ADMIN`, `MANAGER`
+```ts
+type MealTemplateBody = {
+  dayOfWeek: DayOfWeek;
+  meals: MealType[];
+};
+```
 
-### Update Template
+Rules:
 
-- Method: `PATCH`
-- Path: `/templates`
-- Auth: `ADMIN`, `MANAGER`
+- `dayOfWeek` must be one of the seven uppercase enum values
+- `meals` must contain at least one value
+- each meal must be one of `BREAKFAST`, `LUNCH`, `DINNER`
 
-Request body:
+Example:
 
 ```json
 {
@@ -282,72 +332,76 @@ Request body:
 }
 ```
 
-Notes:
+### `PATCH /deadlines/:mealType`
 
-- Update one day at a time.
-- `updatedById` is not needed from the frontend.
+Auth: `ADMIN`, `MANAGER`
 
-## 4. Meal Deadlines
+Validated `params`:
 
-### Get Deadlines
-
-- Method: `GET`
-- Path: `/deadlines`
-- Auth: Public
-
-### Update Deadline By Meal Type
-
-- Method: `PATCH`
-- Path: `/deadlines/:mealType`
-- Auth: `ADMIN`, `MANAGER`
-
-Example path:
-
-```txt
-/deadlines/BREAKFAST
+```ts
+type UpdateDeadlineParams = {
+  mealType: MealType;
+};
 ```
 
-Request body:
+Validated `body`:
 
-```json
-{
-  "time": "22:00",
-  "offsetDays": -1
-}
+```ts
+type UpdateDeadlineBody = {
+  time: string;
+  offsetDays: number;
+};
 ```
 
-Meaning:
+Rules:
 
-- `time: "22:00"` and `offsetDays: -1` for breakfast means the breakfast deadline is previous day 10:00 PM in GMT+6.
+- `mealType` must be `BREAKFAST`, `LUNCH`, or `DINNER`
+- `time` must match `HH:MM`
+- `offsetDays` must be an integer
 
-### Create Or Upsert Deadline
+### `POST /deadlines`
 
-- Method: `POST`
-- Path: `/deadlines`
-- Auth: `ADMIN`, `MANAGER`
+Auth: `ADMIN`, `MANAGER`
 
-Request body:
+Validated `body`:
 
-```json
-{
-  "type": "DINNER",
-  "time": "12:00",
-  "offsetDays": 0
-}
+```ts
+type DeadlineBody = {
+  type: MealType;
+  time: string;
+  offsetDays: number;
+};
 ```
 
-## 5. Meal Schedules
+Rules:
 
-### Get Schedules
+- `type` must be `BREAKFAST`, `LUNCH`, or `DINNER`
+- `time` must match `HH:MM`
+- `offsetDays` must be an integer
 
-- Method: `GET`
-- Path: `/schedules`
-- Auth: Public
+Note:
 
-Supported query params:
+- the schema transforms `type` to uppercase, but the enum already expects uppercase values, so the frontend should still send uppercase enum strings
 
-- `date=YYYY-MM-DD`
-- `month=YYYY-MM`
+### `GET /schedules`
+
+Auth: public
+
+Validated `query`:
+
+```ts
+type ScheduleQuery = {
+  date?: string;
+  month?: string;
+};
+```
+
+Rules:
+
+- `date`, if sent, must be `YYYY-MM-DD`
+- `month`, if sent, must be `YYYY-MM`
+- backend allows sending neither
+- backend also allows sending both, but frontend should normally send one filter or none
 
 Examples:
 
@@ -357,439 +411,311 @@ Examples:
 /schedules?month=2026-04
 ```
 
-### Get Schedule By ID
+### `POST /schedules/generate`
 
-- Method: `GET`
-- Path: `/schedules/:id`
-- Auth: Public
+Auth: `ADMIN`, `MANAGER`
 
-### Get Daily Registration Summary
-
-- Method: `GET`
-- Path: `/schedules/:date/registrations`
-- Auth: Public
-
-Example:
-
-```txt
-/schedules/2026-04-05/registrations
-```
-
-### Create Schedule
-
-- Method: `POST`
-- Path: `/schedules`
-- Auth: `ADMIN`, `MANAGER`
-
-Request body:
-
-```json
-{
-  "date": "2026-04-05",
-  "meals": [
-    {
-      "type": "BREAKFAST",
-      "isAvailable": true,
-      "weight": 1,
-      "menu": "Paratha and egg"
-    },
-    {
-      "type": "LUNCH",
-      "weight": 1.5,
-      "menu": "Rice and beef"
-    }
-  ]
-}
-```
-
-### Generate Month Schedules From Template
-
-- Method: `POST`
-- Path: `/schedules/generate`
-- Auth: `ADMIN`, `MANAGER`
-
-Request body:
-
-```json
-{
-  "month": "2026-04"
-}
-```
-
-Notes:
-
-- Only non-existing schedules for that month are created.
-- Generation uses the weekly meal template.
-- Finalized months are locked.
-
-### Add Meal To Existing Schedule
-
-- Method: `POST`
-- Path: `/schedules/:scheduleId/meals`
-- Auth: `ADMIN`, `MANAGER`
-
-Request body:
-
-```json
-{
-  "type": "DINNER",
-  "isAvailable": true,
-  "weight": 1,
-  "menu": "Khichuri"
-}
-```
-
-### Update Scheduled Meal
-
-- Method: `PATCH`
-- Path: `/schedules/:scheduleId/meals/:mealType`
-- Auth: `ADMIN`, `MANAGER`
-
-Request body:
-
-```json
-{
-  "isAvailable": false,
-  "weight": 1.25,
-  "menu": "Updated menu"
-}
-```
-
-### Delete Scheduled Meal
-
-- Method: `DELETE`
-- Path: `/schedules/:scheduleId/meals/:mealType`
-- Auth: `ADMIN`, `MANAGER`
-
-### Delete Schedule
-
-- Method: `DELETE`
-- Path: `/schedules/:id`
-- Auth: `ADMIN`, `MANAGER`
-
-## 6. Meal Registrations
-
-### Get Registrations
-
-- Method: `GET`
-- Path: `/registrations`
-- Auth: Authenticated
-
-Supported query params:
-
-- `userId`
-
-Behavior:
-
-- `MEMBER` users are automatically restricted to their own registrations
-- `ADMIN` and `MANAGER` may query any user
-
-### Create Or Upsert Registration
-
-- Method: `POST`
-- Path: `/registrations`
-- Auth: Authenticated
-
-Request body for self-registration:
-
-```json
-{
-  "scheduledMealId": "cm123",
-  "count": 2
-}
-```
-
-Request body for manager/admin registering on behalf of a member:
-
-```json
-{
-  "scheduledMealId": "cm123",
-  "userId": "target_member_user_id",
-  "count": 2
-}
-```
-
-Rules:
-
-- `MEMBER` can only register for themselves
-- `MEMBER` is blocked after deadline
-- `MANAGER` and `ADMIN` can register for any user even after deadline
-- finalized months are locked
-- unavailable meals cannot be registered
-
-### Update Registration
-
-- Method: `PATCH`
-- Path: `/registrations/:id`
-- Auth: Authenticated
-
-Request body:
-
-```json
-{
-  "count": 3
-}
-```
-
-Rules:
-
-- `MEMBER` can only update their own registration
-- `MEMBER` is blocked after deadline
-- `MANAGER` and `ADMIN` can update any registration
-- finalized months are locked
-
-### Delete Registration
-
-- Method: `DELETE`
-- Path: `/registrations/:id`
-- Auth: Authenticated
-
-Rules:
-
-- `MEMBER` can only delete their own registration
-- `MEMBER` is blocked after deadline
-- `MANAGER` and `ADMIN` can delete any registration
-- finalized months are locked
-
-## 7. Deposits
-
-### Get Deposits
-
-- Method: `GET`
-- Path: `/deposits`
-- Auth: Authenticated
-
-Supported query params:
-
-- `userId`
-
-Behavior:
-
-- `MEMBER` always gets only their own deposits
-- `ADMIN` and `MANAGER` may request all or filter by `userId`
-
-### Get My Monthly Deposit Total
-
-- Method: `GET`
-- Path: `/deposits/my-total`
-- Auth: Authenticated
-
-Query params:
-
-```txt
-month=2026-04
-```
-
-Example:
-
-```txt
-/deposits/my-total?month=2026-04
-```
-
-### Create Deposit
-
-- Method: `POST`
-- Path: `/deposits`
-- Auth: `ADMIN`, `MANAGER`
-
-Request body:
-
-```json
-{
-  "userId": "member_user_id",
-  "amount": 500,
-  "month": "2026-04",
-  "note": "Cash deposit",
-  "date": "2026-04-03"
-}
-```
-
-Rules:
-
-- finalized months are locked
-- if `date` is omitted, backend uses current Dhaka date
-
-### Update Deposit
-
-- Method: `PATCH`
-- Path: `/deposits/:id`
-- Auth: `ADMIN`, `MANAGER`
-
-Request body:
-
-```json
-{
-  "amount": 700,
-  "note": "Updated note"
-}
-```
-
-Rules:
-
-- finalized source month is locked
-- if month is changed, target month must also be non-finalized
-
-### Delete Deposit
-
-- Method: `DELETE`
-- Path: `/deposits/:id`
-- Auth: `ADMIN`, `MANAGER`
-
-Rules:
-
-- finalized months are locked
-
-## 8. Expenses
-
-### Get Expenses
-
-- Method: `GET`
-- Path: `/expenses`
-- Auth: `ADMIN`, `MANAGER`
-
-Supported query params:
-
-- `month`
-
-### Create Expense
-
-- Method: `POST`
-- Path: `/expenses`
-- Auth: `ADMIN`, `MANAGER`
-
-Request body:
-
-```json
-{
-  "date": "2026-04-03",
-  "amount": 1800,
-  "category": "BAZAR",
-  "personName": "Rakib",
-  "description": "Vegetables and fish",
-  "month": "2026-04"
-}
-```
-
-Rules:
-
-- finalized months are locked
-- if `date` is omitted, backend uses current Dhaka date
-
-### Update Expense
-
-- Method: `PATCH`
-- Path: `/expenses/:id`
-- Auth: `ADMIN`, `MANAGER`
-
-Request body:
-
-```json
-{
-  "amount": 2000,
-  "description": "Updated description"
-}
-```
-
-Rules:
-
-- finalized source month is locked
-- if month is changed, target month must also be non-finalized
-
-### Delete Expense
-
-- Method: `DELETE`
-- Path: `/expenses/:id`
-- Auth: `ADMIN`, `MANAGER`
-
-Rules:
-
-- finalized months are locked
-
-## 9. Monthly Finalization
-
-### Get Finalized Months
-
-- Method: `GET`
-- Path: `/finalize`
-- Auth: Authenticated
-
-Behavior:
-
-- `MEMBER` gets only their own summary per month
-- `ADMIN` and `MANAGER` get the full finalization list
-
-### Get Finalization Details By Month
-
-- Method: `GET`
-- Path: `/finalize/:month`
-- Auth: Authenticated
-
-Example:
-
-```txt
-/finalize/2026-04
-```
-
-Behavior:
-
-- `MEMBER` gets only their own breakdown
-- `ADMIN` and `MANAGER` get full member breakdown
-
-### Finalize Month
-
-- Method: `POST`
-- Path: `/finalize`
-- Auth: `ADMIN`, `MANAGER`
-
-Request body:
-
-```json
-{
-  "month": "2026-04"
-}
-```
-
-Business rules:
-
-- month must not already be finalized
-- month must contain at least one expense
-- month must contain at least one meal registration
-- once finalized, month becomes locked for deposits, expenses, and meal-registration-related mutations
-
-## Data Shapes The Frontend Will Commonly Use
-
-### User
+Validated `body`:
 
 ```ts
-type User = {
+type GenerateSchedulesBody = {
+  month: string;
+};
+```
+
+Rules:
+
+- `month` must be `YYYY-MM`
+
+### `POST /schedules`
+
+Auth: `ADMIN`, `MANAGER`
+
+Validated `body`:
+
+```ts
+type CreateScheduleBody = {
+  date: string;
+  meals: {
+    type: MealType;
+    isAvailable?: boolean;
+    weight?: number;
+    menu?: string;
+  }[];
+};
+```
+
+Rules:
+
+- `date` must be `YYYY-MM-DD`
+- `meals` must be an array
+- each meal `type` must be a valid `MealType`
+- `weight`, if sent, must be a positive number
+
+Note:
+
+- the schema does not require at least one meal, so an empty array is currently valid
+
+### `POST /schedules/:scheduleId/meals`
+
+Auth: `ADMIN`, `MANAGER`
+
+Validated `body`:
+
+```ts
+type AddMealBody = {
+  type: MealType;
+  isAvailable?: boolean;
+  weight?: number;
+  menu?: string;
+};
+```
+
+Rules:
+
+- `type` is required
+- `weight`, if sent, must be a positive number
+
+### `PATCH /schedules/:scheduleId/meals/:mealType`
+
+Auth: `ADMIN`, `MANAGER`
+
+Validated `params`:
+
+```ts
+type UpdateMealParams = {
+  mealType: MealType;
+};
+```
+
+Validated `body`:
+
+```ts
+type UpdateMealBody = {
+  isAvailable?: boolean;
+  weight?: number;
+  menu?: string;
+};
+```
+
+Rules:
+
+- `mealType` must be a valid `MealType`
+- `weight`, if sent, must be a positive number
+- backend currently allows an empty object
+
+### `POST /registrations`
+
+Auth: authenticated
+
+Validated `body`:
+
+```ts
+type UpsertRegistrationBody = {
+  scheduledMealId: string;
+  userId?: string;
+  count: number;
+};
+```
+
+Rules:
+
+- `scheduledMealId` is required and must be non-empty
+- `userId`, if sent, must be non-empty
+- `count` must be an integer and at least `1`
+
+Frontend behavior note:
+
+- `MEMBER` should omit `userId`
+- `ADMIN` and `MANAGER` may send `userId` to register for another user
+
+### `PATCH /registrations/:id`
+
+Auth: authenticated
+
+Validated `body`:
+
+```ts
+type UpdateRegistrationBody = {
+  count: number;
+};
+```
+
+Rules:
+
+- `count` must be an integer and at least `1`
+
+### `GET /deposits/my-total`
+
+Auth: authenticated
+
+Validated `query`:
+
+```ts
+type MonthlyDepositTotalQuery = {
+  month: string;
+};
+```
+
+Rules:
+
+- `month` must be `YYYY-MM`
+
+### `POST /deposits`
+
+Auth: `ADMIN`, `MANAGER`
+
+Validated `body`:
+
+```ts
+type CreateDepositBody = {
+  userId: string;
+  amount: number;
+  month: string;
+  note?: string;
+  date?: string;
+};
+```
+
+Rules:
+
+- `userId` is required and must be non-empty
+- `amount` must be greater than `0`
+- `month` must be `YYYY-MM`
+- `date`, if sent, is only checked as a string by Zod, so frontend should still send `YYYY-MM-DD`
+
+### `PATCH /deposits/:id`
+
+Auth: `ADMIN`, `MANAGER`
+
+Validated `body`:
+
+```ts
+type UpdateDepositBody = {
+  userId?: string;
+  amount?: number;
+  month?: string;
+  note?: string;
+  date?: string;
+};
+```
+
+Rules:
+
+- if present, `userId` must be non-empty
+- if present, `amount` must be greater than `0`
+- if present, `month` must be `YYYY-MM`
+- at least one field must be sent
+
+### `POST /expenses`
+
+Auth: `ADMIN`, `MANAGER`
+
+Validated `body`:
+
+```ts
+type CreateExpenseBody = {
+  date?: string;
+  amount: number;
+  category: ExpenseCategory;
+  personName: string;
+  description?: string;
+  month: string;
+};
+```
+
+Rules:
+
+- `amount` must be greater than `0`
+- `category` must be one of `GAS`, `TRANSPORT`, `BAZAR`, `OTHER`
+- `personName` is required and must be non-empty
+- `month` must be `YYYY-MM`
+- `date`, if sent, is only checked as a string by Zod, so frontend should still send `YYYY-MM-DD`
+
+### `PATCH /expenses/:id`
+
+Auth: `ADMIN`, `MANAGER`
+
+Validated `body`:
+
+```ts
+type UpdateExpenseBody = {
+  date?: string;
+  amount?: number;
+  category?: ExpenseCategory;
+  personName?: string;
+  description?: string;
+  month?: string;
+};
+```
+
+Rules:
+
+- if present, `amount` must be greater than `0`
+- if present, `category` must be a valid `ExpenseCategory`
+- if present, `personName` must be non-empty
+- if present, `month` must be `YYYY-MM`
+- at least one field must be sent
+
+### `POST /finalize`
+
+Auth: `ADMIN`, `MANAGER`
+
+Same validation is also used by `POST /finalization`.
+
+Validated `body`:
+
+```ts
+type FinalizeMonthBody = {
+  month: string;
+};
+```
+
+Rules:
+
+- `month` must be `YYYY-MM`
+
+## Runtime Business Rules Not Enforced Only By Zod
+
+These are important for frontend UX even though they are not part of the validation schema itself.
+
+- finalized months are locked for deposit, expense, schedule-related, and registration-related mutations
+- `MEMBER` users can only create, update, or delete their own registrations
+- member registrations can fail after the configured deadline for that meal type
+- unavailable meals cannot be registered
+- month finalization requires at least one expense
+- month finalization requires at least one meal registration
+
+## Common Response Types
+
+These are practical frontend types based on the current backend models and responses.
+
+```ts
+export type User = {
   id: string;
   firebaseUid: string;
   name: string;
   email: string;
   mobile?: string | null;
-  role: 'ADMIN' | 'MANAGER' | 'MEMBER';
+  role: UserRole;
   profileImage?: string | null;
   balance: string | number;
   isActive: boolean;
   createdAt: string;
   updatedAt: string;
 };
-```
 
-### Meal Schedule
-
-```ts
-type ScheduledMeal = {
+export type ScheduledMeal = {
   id: string;
   scheduleId: string;
-  type: 'BREAKFAST' | 'LUNCH' | 'DINNER';
+  type: MealType;
   isAvailable: boolean;
   weight: string | number;
   menu?: string | null;
   updatedAt: string;
 };
 
-type MealSchedule = {
+export type MealSchedule = {
   id: string;
   date: string;
   createdById: string;
@@ -797,12 +723,8 @@ type MealSchedule = {
   updatedAt: string;
   meals: ScheduledMeal[];
 };
-```
 
-### Registration
-
-```ts
-type MealRegistration = {
+export type MealRegistration = {
   id: string;
   scheduledMealId: string;
   userId: string;
@@ -811,12 +733,8 @@ type MealRegistration = {
   createdAt: string;
   updatedAt: string;
 };
-```
 
-### Deposit
-
-```ts
-type Deposit = {
+export type Deposit = {
   id: string;
   userId: string;
   amount: string | number;
@@ -826,83 +744,44 @@ type Deposit = {
   date: string;
   createdAt: string;
 };
-```
 
-### Expense
-
-```ts
-type Expense = {
+export type Expense = {
   id: string;
   date: string;
   amount: string | number;
-  category: 'GAS' | 'TRANSPORT' | 'BAZAR' | 'OTHER';
+  category: ExpenseCategory;
   personName: string;
   description?: string | null;
   loggedById: string;
   month: string;
   createdAt: string;
 };
+
+export type ApiSuccess<T> = {
+  success: true;
+  message: string;
+  meta: unknown;
+  data: T;
+};
+
+export type ApiErrorSource = {
+  path: string;
+  message: string;
+};
+
+export type ApiErrorResponse = {
+  success: false;
+  message: string;
+  errorSources?: ApiErrorSource[];
+  stack?: string | null;
+};
 ```
 
-## Suggested Frontend Route Guards
+## Frontend Implementation Notes
 
-Recommended frontend behavior:
-
-- if user not logged in:
-  - redirect to login for protected pages
-- if role is `MEMBER`:
-  - hide manager/admin pages and actions
-- if role is `MANAGER`:
-  - allow operational pages but hide admin-only role controls
-- if role is `ADMIN`:
-  - allow full access
-
-## Suggested Frontend Pages
-
-### Member
-
-- dashboard
-- my profile
-- my meal registrations
-- meal schedule viewer
-- my deposits
-- my monthly summary
-
-### Manager
-
-- all schedules
-- meal template management
-- deadline management
-- registrations management
-- deposits management
-- expenses management
-- monthly finalization
-
-### Admin
-
-- all manager pages
-- user list
-- role management
-- user deactivation
-
-## Integration Checklist
-
-- configure Firebase Auth in Next.js
-- store backend base URL in `NEXT_PUBLIC_API_BASE_URL`
-- create a shared authenticated fetch helper
-- call `/auth/register` after account creation / first login
-- fetch current user context for role-aware UI
-- use PRD-style routes:
-  - `/templates`
-  - `/schedules`
-  - `/deadlines`
-  - `/finalize`
-- keep all dining date inputs in `YYYY-MM-DD`
-- keep all month inputs in `YYYY-MM`
-- display deadline and schedule times in GMT+6 semantics
-
-## Final Notes
-
-- The backend currently supports frontend development well enough to build the app UI and flows.
-- The frontend should treat business dates as Dhaka dates, not browser-local dates.
-- If you add admin dashboards, plan the UI around role-based visibility because the backend will enforce those rules.
+- prefer one shared API client that automatically attaches Firebase ID tokens
+- keep enum values centralized in frontend constants or types
+- normalize all month input values as `YYYY-MM`
+- normalize all date input values as `YYYY-MM-DD`
+- send numeric fields as numbers, especially `amount`, `weight`, `count`, and `offsetDays`
+- avoid sending empty objects to update routes unless the route explicitly supports it

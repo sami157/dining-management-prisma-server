@@ -37,7 +37,7 @@ const firebaseAuthMiddleware = (...allowedRoles: UserRole[]) => {
       }
 
       if (allowedRoles.length > 0 && !allowedRoles.includes(appUser.role)) {
-        throw new ApiError(httpStatus.FORBIDDEN, 'You are not authorized to access this resource');
+        throw new ApiError(httpStatus.FORBIDDEN, 'You are not authorized');
       }
 
       req.firebaseUser = {

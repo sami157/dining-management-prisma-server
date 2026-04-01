@@ -8,6 +8,7 @@ import { UserValidation } from './user.validation';
 const router = express.Router();
 
 router.get('/', firebaseAuthMiddleware(UserRole.ADMIN, UserRole.MANAGER), UserController.getAllUsers);
+router.get('/me', firebaseAuthMiddleware(), UserController.getMyProfile);
 router.get('/:id', firebaseAuthMiddleware(UserRole.ADMIN, UserRole.MANAGER), UserController.getUserById);
 router.patch(
   '/me',

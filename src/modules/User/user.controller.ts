@@ -14,6 +14,21 @@ const getAllUsers = catchAsync(async (req, res) => {
   });
 });
 
+const getMyProfile = catchAsync(async (req, res) => {
+  const userId = req.firebaseUser?.id;
+  if (!userId) {
+    throw new ApiError(httpStatus.UNAUTHORIZED, 'Authenticated user context is missing');
+  }
+
+  const result = await UserService.getMyProfile(userId);
+  sendResponse(res, {
+    statusCode: httpStatus.OK,
+    success: true,
+    message: 'Profile retrieved successfully!',
+    data: result,
+  });
+});
+
 const getUserById = catchAsync(async (req, res) => {
   const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
   const result = await UserService.getUserById(id);
@@ -76,6 +91,7 @@ const deactivateUser = catchAsync(async (req, res) => {
 
 export const UserController = {
   getAllUsers,
+  getMyProfile,
   getUserById,
   updateUser,
   updateMyProfile,
