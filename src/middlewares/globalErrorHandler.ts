@@ -1,6 +1,6 @@
 import { ErrorRequestHandler } from 'express';
 import { ZodError } from 'zod';
-import { Prisma } from '@prisma/client';
+import { Prisma } from '../../generated/prisma/client';
 import config from '../config';
 import { TErrorSource } from '../interfaces/error';
 import handleZodError from '../errors/handleZodError';
