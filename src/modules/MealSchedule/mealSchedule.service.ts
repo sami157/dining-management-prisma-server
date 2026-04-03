@@ -1,7 +1,12 @@
 import { prisma } from '../../lib/prisma';
 import ApiError from '../../errors/ApiError';
 import { DayOfWeek, MealType } from '../../../generated/prisma/enums';
-import { getMonthDateRangeUtc, getMonthStringFromUtcDate, toUtcDateAtStartOfDay } from '../../utils/dateTime';
+import {
+  getMealDeadlineUtc,
+  getMonthDateRangeUtc,
+  getMonthStringFromUtcDate,
+  toUtcDateAtStartOfDay,
+} from '../../utils/dateTime';
 import { assertDateNotFinalized, assertMonthNotFinalized } from '../../utils/finalizationLock';
 
 export type MealDefinition = {
@@ -25,6 +30,48 @@ const getDayOfWeekFromDate = (date: Date): DayOfWeek => {
   return days[date.getUTCDay()];
 };
 
+type ScheduleWithMeals = {
+  date: Date;
+  meals: Array<{
+    type: MealType;
+  }>;
+};
+
+const withDerivedDeadlines = async <T extends ScheduleWithMeals>(schedules: T[]) => {
+  if (!schedules.length) return schedules;
+
+  const mealTypes = [...new Set(schedules.flatMap((schedule) => schedule.meals.map((meal) => meal.type)))];
+  if (!mealTypes.length) return schedules;
+
+  const deadlineConfigs = await prisma.mealDeadline.findMany({
+    where: { type: { in: mealTypes } },
+  });
+
+  const deadlineConfigMap = new Map(
+    deadlineConfigs.map((deadlineConfig) => [deadlineConfig.type, deadlineConfig]),
+  );
+
+  const missingMealTypes = mealTypes.filter((mealType) => !deadlineConfigMap.has(mealType));
+  if (missingMealTypes.length) {
+    throw new ApiError(
+      400,
+      `Meal deadline is not configured for: ${missingMealTypes.join(', ')}`,
+    );
+  }
+
+  return schedules.map((schedule) => ({
+    ...schedule,
+    meals: schedule.meals.map((meal) => {
+      const deadlineConfig = deadlineConfigMap.get(meal.type)!;
+
+      return {
+        ...meal,
+        deadline: getMealDeadlineUtc(schedule.date, deadlineConfig.time, deadlineConfig.offsetDays),
+      };
+    }),
+  }));
+};
+
 const getAllSchedules = async (filters?: { date?: string; month?: string }) => {
   const where =
     filters?.date
@@ -33,11 +80,13 @@ const getAllSchedules = async (filters?: { date?: string; month?: string }) => {
         ? { date: { gte: getMonthDateRangeUtc(filters.month).startDate, lt: getMonthDateRangeUtc(filters.month).endDate } }
         : {};
 
-  return prisma.mealSchedule.findMany({
+  const schedules = await prisma.mealSchedule.findMany({
     where,
     orderBy: { date: 'asc' },
     include: { meals: true },
   });
+
+  return withDerivedDeadlines(schedules);
 };
 
 const getScheduleById = async (id: string) => {
@@ -47,7 +96,8 @@ const getScheduleById = async (id: string) => {
   });
 
   if (!schedule) throw new ApiError(404, 'Meal schedule not found');
-  return schedule;
+  const [scheduleWithDeadlines] = await withDerivedDeadlines([schedule]);
+  return scheduleWithDeadlines;
 };
 
 const createSchedule = async (date: string, createdById: string, meals: MealDefinition[]) => {
@@ -56,7 +106,7 @@ const createSchedule = async (date: string, createdById: string, meals: MealDefi
   const scheduleExists = await prisma.mealSchedule.findUnique({ where: { date: scheduleDate } });
   if (scheduleExists) throw new ApiError(400, 'Meal schedule for this date already exists');
 
-  return prisma.mealSchedule.create({
+  const schedule = await prisma.mealSchedule.create({
     data: {
       date: scheduleDate,
       createdById,
@@ -71,6 +121,9 @@ const createSchedule = async (date: string, createdById: string, meals: MealDefi
     },
     include: { meals: true },
   });
+
+  const [scheduleWithDeadlines] = await withDerivedDeadlines([schedule]);
+  return scheduleWithDeadlines;
 };
 
 const generateSchedules = async (month: string, createdById: string) => {
@@ -122,7 +175,7 @@ const generateSchedules = async (month: string, createdById: string) => {
     createdSchedules.push(schedule);
   }
 
-  return createdSchedules;
+  return withDerivedDeadlines(createdSchedules);
 };
 
 const getDailyRegistrationSummary = async (date: string) => {
