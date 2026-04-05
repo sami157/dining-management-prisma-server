@@ -53,8 +53,26 @@ const finalizeMonth = catchAsync(async (req, res) => {
   });
 });
 
+const rollbackMonth = catchAsync(async (req, res) => {
+  const actorId = req.firebaseUser?.id;
+  if (!actorId) {
+    throw new ApiError(httpStatus.UNAUTHORIZED, 'Authenticated user context is missing');
+  }
+
+  const month = Array.isArray(req.params.month) ? req.params.month[0] : req.params.month;
+  const result = await FinalizationService.rollbackMonth(month, actorId);
+
+  sendResponse(res, {
+    statusCode: httpStatus.OK,
+    success: true,
+    message: 'Month finalization rolled back successfully!',
+    data: result,
+  });
+});
+
 export const FinalizationController = {
   getAllFinalizations,
   getFinalizationByMonth,
   finalizeMonth,
+  rollbackMonth,
 };

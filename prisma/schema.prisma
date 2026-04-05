@@ -70,7 +70,9 @@ model User {
   deadlinesUpdated MealDeadline[]
 
   // Finalization relations
-  finalizationsPerformed MonthlyFinalization[]
+  finalizationsPerformed MonthlyFinalization[]    @relation("FinalizedBy")
+  finalizationsRolledBack MonthlyFinalization[]   @relation("RolledBackBy")
+  memberSettlements       MonthlyMemberSettlement[]
 }
 
 model WeeklyMealTemplate {
@@ -164,7 +166,30 @@ model MonthlyFinalization {
   totalWeightedMealCount Decimal  @db.Decimal(12, 2)
   mealRate               Decimal  @db.Decimal(10, 4)
   finalizedById          String
-  finalizedBy            User     @relation(fields: [finalizedById], references: [id])
+  finalizedBy            User     @relation("FinalizedBy", fields: [finalizedById], references: [id])
   finalizedAt            DateTime @default(now())
   isLocked               Boolean  @default(true)
+  rolledBackAt           DateTime?
+  rolledBackById         String?
+  rolledBackBy           User?    @relation("RolledBackBy", fields: [rolledBackById], references: [id])
+  memberSettlements      MonthlyMemberSettlement[]
+}
+
+model MonthlyMemberSettlement {
+  id                   String             @id @default(cuid())
+  month                String
+  finalizationId       String
+  finalization         MonthlyFinalization @relation(fields: [finalizationId], references: [id], onDelete: Cascade)
+  userId               String
+  user                 User               @relation(fields: [userId], references: [id])
+  openingBalance       Decimal            @db.Decimal(10, 2)
+  depositTotal         Decimal            @db.Decimal(10, 2)
+  weightedMealCount    Decimal            @db.Decimal(12, 2)
+  mealCost             Decimal            @db.Decimal(10, 2)
+  appliedBalanceDelta  Decimal            @db.Decimal(10, 2)
+  closingBalance       Decimal            @db.Decimal(10, 2)
+  createdAt            DateTime           @default(now())
+
+  @@unique([finalizationId, userId])
+  @@index([month, userId])
 }

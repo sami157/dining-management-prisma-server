@@ -15,5 +15,11 @@ router.post(
   validateRequest(FinalizationValidation.finalizationValidationSchema),
   FinalizationController.finalizeMonth,
 );
+router.post(
+  '/:month/rollback',
+  firebaseAuthMiddleware(UserRole.ADMIN),
+  validateRequest(FinalizationValidation.rollbackFinalizationValidationSchema),
+  FinalizationController.rollbackMonth,
+);
 
 export const FinalizationRoutes = router;

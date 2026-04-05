@@ -7,6 +7,7 @@ import { FinalizationRoutes } from '../modules/Finalization/finalization.route';
 import { MealScheduleRoutes } from '../modules/MealSchedule/mealSchedule.route';
 import { MealTemplateRoutes } from '../modules/MealTemplate/mealTemplate.route';
 import { RegistrationRoutes } from '../modules/Registration/registration.route';
+import { StatsRoutes } from '../modules/Stats/stats.route';
 import { UserRoutes } from '../modules/User/user.route';
 
 const router = Router();
@@ -64,6 +65,10 @@ const moduleRoutes: TModuleRoute[] = [
     {
       path: '/registrations',
       handler: RegistrationRoutes,
+    },
+    {
+      path: '/stats',
+      handler: StatsRoutes,
     },
     {
       path: '/users',

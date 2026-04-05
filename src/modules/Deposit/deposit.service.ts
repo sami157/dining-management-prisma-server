@@ -43,17 +43,29 @@ const createDeposit = async (payload: DepositPayload) => {
 
   await assertMonthNotFinalized(payload.month);
 
-  return prisma.deposit.create({
-    data: {
-      userId: payload.userId,
-      amount: payload.amount,
-      recordedById: payload.recordedById,
-      month: payload.month,
-      note: payload.note,
-      date: payload.date
-        ? toUtcDateAtStartOfDay(payload.date)
-        : toUtcDateAtStartOfDay(getCurrentDhakaDateString()),
-    },
+  return prisma.$transaction(async (tx) => {
+    const user = await tx.user.findUnique({ where: { id: payload.userId } });
+    if (!user) throw new ApiError(404, 'User not found');
+
+    const deposit = await tx.deposit.create({
+      data: {
+        userId: payload.userId,
+        amount: payload.amount,
+        recordedById: payload.recordedById,
+        month: payload.month,
+        note: payload.note,
+        date: payload.date
+          ? toUtcDateAtStartOfDay(payload.date)
+          : toUtcDateAtStartOfDay(getCurrentDhakaDateString()),
+      },
+    });
+
+    await tx.user.update({
+      where: { id: payload.userId },
+      data: { balance: { increment: payload.amount } },
+    });
+
+    return deposit;
   });
 };
 
@@ -70,16 +82,48 @@ const updateDeposit = async (id: string, payload: UpdateDepositPayload) => {
     throw new ApiError(400, 'Deposit amount must be greater than 0');
   }
 
-  return prisma.deposit.update({
-    where: { id },
-    data: {
-      userId: payload.userId,
-      amount: payload.amount,
-      recordedById: payload.recordedById,
-      month: payload.month,
-      note: payload.note,
-      date: payload.date ? toUtcDateAtStartOfDay(payload.date) : undefined,
-    },
+  const nextUserId = payload.userId ?? existing.userId;
+  const nextAmount = payload.amount ?? Number(existing.amount);
+
+  return prisma.$transaction(async (tx) => {
+    const existingUser = await tx.user.findUnique({ where: { id: existing.userId } });
+    if (!existingUser) throw new ApiError(404, 'User not found');
+
+    if (nextUserId === existing.userId) {
+      const delta = nextAmount - Number(existing.amount);
+
+      if (delta !== 0) {
+        await tx.user.update({
+          where: { id: existing.userId },
+          data: { balance: { increment: delta } },
+        });
+      }
+    } else {
+      const nextUser = await tx.user.findUnique({ where: { id: nextUserId } });
+      if (!nextUser) throw new ApiError(404, 'User not found');
+
+      await tx.user.update({
+        where: { id: existing.userId },
+        data: { balance: { decrement: Number(existing.amount) } },
+      });
+
+      await tx.user.update({
+        where: { id: nextUserId },
+        data: { balance: { increment: nextAmount } },
+      });
+    }
+
+    return tx.deposit.update({
+      where: { id },
+      data: {
+        userId: payload.userId,
+        amount: payload.amount,
+        recordedById: payload.recordedById,
+        month: payload.month,
+        note: payload.note,
+        date: payload.date ? toUtcDateAtStartOfDay(payload.date) : undefined,
+      },
+    });
   });
 };
 
@@ -88,7 +132,16 @@ const deleteDeposit = async (id: string) => {
   if (!existing) throw new ApiError(404, 'Deposit not found');
   await assertMonthNotFinalized(existing.month);
 
-  return prisma.deposit.delete({ where: { id } });
+  return prisma.$transaction(async (tx) => {
+    const deletedDeposit = await tx.deposit.delete({ where: { id } });
+
+    await tx.user.update({
+      where: { id: existing.userId },
+      data: { balance: { decrement: Number(existing.amount) } },
+    });
+
+    return deletedDeposit;
+  });
 };
 
 export const DepositService = {
