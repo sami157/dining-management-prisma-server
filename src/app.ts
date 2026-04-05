@@ -16,7 +16,7 @@ app.use(cors());
 app.use('/api/v1', router);
 
 app.get('/', (req: Request, res: Response) => {
-  res.send('Hello from Apollo Gears World!');
+  res.send('Welcome to the Dining Management Server!');
 });
 
 // global error handler
